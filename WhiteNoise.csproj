@@ -1,7 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <!--
+      Build only the platforms whose SDKs are installed.
+      To build all: net8.0-android;net8.0-ios;net8.0-maccatalyst;net8.0-windows10.0.19041.0
+      Windows-only (fastest to start): net8.0-windows10.0.19041.0
+    -->
     <TargetFrameworks>net8.0-android;net8.0-ios;net8.0-maccatalyst;net8.0-windows10.0.19041.0</TargetFrameworks>
+
     <OutputType>Exe</OutputType>
     <RootNamespace>WhiteNoise</RootNamespace>
     <UseMaui>true</UseMaui>
@@ -10,56 +16,45 @@
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
-    <!-- App identity -->
+    <!-- App identity — change com.yourname to something unique -->
     <ApplicationTitle>White Noise</ApplicationTitle>
     <ApplicationId>com.yourname.whitenoise</ApplicationId>
     <ApplicationVersion>1</ApplicationVersion>
     <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
 
-    <!-- iOS / macOS -->
+    <!-- Fix: use unpackaged mode on Windows (no MSIX, no Store cert needed) -->
+    <WindowsPackageType Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">None</WindowsPackageType>
+
+    <!-- Platform minimum versions -->
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">14.2</SupportedOSPlatformVersion>
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">14.0</SupportedOSPlatformVersion>
-    <!-- Android -->
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">21.0</SupportedOSPlatformVersion>
-    <!-- Windows -->
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
     <TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
   </PropertyGroup>
 
-  <!-- ── NuGet packages ──────────────────────────────────────────────────── -->
+  <!-- ── NuGet packages ────────────────────────────────────────────────── -->
   <ItemGroup>
-    <PackageReference Include="Microsoft.Maui.Controls" Version="8.*"/>
-    <PackageReference Include="Microsoft.Maui.Controls.Compatibility" Version="8.*"/>
-    <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="8.*"/>
-    <!-- NAudio: Windows-only audio output -->
+    <PackageReference Include="Microsoft.Maui.Controls" Version="8.*" />
+    <PackageReference Include="Microsoft.Maui.Controls.Compatibility" Version="8.*" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="8.*" />
+    <!-- NAudio: Windows audio output only -->
     <PackageReference Include="NAudio" Version="2.*"
-                      Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'"/>
+                      Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'" />
   </ItemGroup>
 
-  <!-- ── Platform-specific compile conditions ───────────────────────────── -->
-  <!--
-    The platform files already have #if WINDOWS / #if ANDROID / #if IOS guards.
-    MAUI's single-project SDK handles the rest — each platform folder is
-    auto-included for the correct TFM.
-  -->
-
-  <!-- ── App resources ──────────────────────────────────────────────────── -->
+  <!-- ── App resources ─────────────────────────────────────────────────── -->
   <ItemGroup>
     <MauiIcon Include="Resources/AppIcon/appicon.svg"
               ForegroundFile="Resources/AppIcon/appiconfg.svg"
-              Color="#0D0E12"/>
-    <MauiSplashScreen Include="Resources/Splash/splash.svg" Color="#0D0E12"/>
-    <MauiFont Include="Resources/Fonts/OpenSans-Regular.ttf"/>
-    <MauiFont Include="Resources/Fonts/OpenSans-SemiBold.ttf"/>
-    <MauiImage Include="Resources/Images/**"/>
-    <MauiAsset Include="Resources/Raw/**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)"/>
+              Color="#0D0E12" />
+    <MauiSplashScreen Include="Resources/Splash/splash.svg"
+                      Color="#0D0E12" />
+    <MauiFont Include="Resources/Fonts/OpenSans-Regular.ttf" />
+    <MauiFont Include="Resources/Fonts/OpenSans-SemiBold.ttf" />
+    <MauiImage Include="Resources/Images/**" />
+    <MauiAsset Include="Resources/Raw/**"
+               LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
-
-  <!-- ── Android permissions ────────────────────────────────────────────── -->
-  <!--
-    Add to AndroidManifest.xml:
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-  -->
 
 </Project>

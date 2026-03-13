@@ -1,0 +1,232 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:WhiteNoise.ViewModels"
+             x:Class="WhiteNoise.Views.MainPage"
+             BackgroundColor="#0D0E12"
+             Title="White Noise">
+
+    <ContentPage.Resources>
+        <!-- Colors -->
+        <Color x:Key="Surface">#161820</Color>
+        <Color x:Key="Elevated">#1E2029</Color>
+        <Color x:Key="Accent">#7EB8D4</Color>
+        <Color x:Key="AccentDim">#3A6A80</Color>
+        <Color x:Key="TextPrimary">#E8EAF0</Color>
+        <Color x:Key="TextSecondary">#8890A4</Color>
+        <Color x:Key="Divider">#252730</Color>
+        <Color x:Key="CrackleOrange">#C8793A</Color>
+
+        <!-- Shared label style -->
+        <Style x:Key="Label.Section" TargetType="Label">
+            <Setter Property="TextColor" Value="{StaticResource TextSecondary}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="CharacterSpacing" Value="1.5"/>
+            <Setter Property="FontAttributes" Value="Bold"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+        </Style>
+
+        <Style x:Key="Label.Value" TargetType="Label">
+            <Setter Property="TextColor" Value="{StaticResource Accent}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="HorizontalOptions" Value="End"/>
+        </Style>
+
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="BackgroundColor" Value="{StaticResource Elevated}"/>
+            <Setter Property="Stroke" Value="{StaticResource Divider}"/>
+            <Setter Property="StrokeThickness" Value="1"/>
+            <Setter Property="Padding" Value="20"/>
+            <Setter Property="Margin" Value="0,0,0,12"/>
+            <Setter Property="StrokeShape" Value="RoundRectangle 14"/>
+        </Style>
+
+        <Style TargetType="Slider">
+            <Setter Property="MinimumTrackColor" Value="{StaticResource Accent}"/>
+            <Setter Property="MaximumTrackColor" Value="{StaticResource Divider}"/>
+            <Setter Property="ThumbColor" Value="{StaticResource Accent}"/>
+        </Style>
+
+        <Style TargetType="Switch">
+            <Setter Property="OnColor" Value="{StaticResource Accent}"/>
+            <Setter Property="ThumbColor" Value="{StaticResource TextPrimary}"/>
+        </Style>
+    </ContentPage.Resources>
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20,48,20,32" Spacing="0">
+
+            <!-- ── Header ──────────────────────────────────────────────── -->
+            <Label Text="WHITE NOISE"
+                   TextColor="{StaticResource Accent}"
+                   FontSize="11"
+                   CharacterSpacing="4"
+                   FontAttributes="Bold"
+                   HorizontalOptions="Center"
+                   Margin="0,0,0,4"/>
+
+            <Label Text="Sleep · Focus · Rest"
+                   TextColor="{StaticResource TextSecondary}"
+                   FontSize="15"
+                   HorizontalOptions="Center"
+                   Margin="0,0,0,36"/>
+
+            <!-- ── Play / Stop ──────────────────────────────────────────── -->
+            <Border Style="{StaticResource Card}" Margin="40,0,40,28">
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                    <Button Grid.Column="0"
+                            Text="{Binding PlayPauseLabel}"
+                            Command="{Binding PlayPauseCommand}"
+                            BackgroundColor="{StaticResource Accent}"
+                            TextColor="#0D0E12"
+                            FontAttributes="Bold"
+                            FontSize="15"
+                            CornerRadius="10"
+                            HeightRequest="52"/>
+                    <Button Grid.Column="1"
+                            Text="Stop"
+                            Command="{Binding StopCommand}"
+                            BackgroundColor="Transparent"
+                            BorderColor="{StaticResource Divider}"
+                            BorderWidth="1"
+                            TextColor="{StaticResource TextSecondary}"
+                            FontSize="15"
+                            CornerRadius="10"
+                            HeightRequest="52"/>
+                </Grid>
+            </Border>
+
+            <!-- ── Volume ──────────────────────────────────────────────── -->
+            <Border Style="{StaticResource Card}">
+                <VerticalStackLayout>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Grid.Column="0" Text="VOLUME" Style="{StaticResource Label.Section}"/>
+                        <Label Grid.Column="1" Text="{Binding Volume, StringFormat='{0:F0}%'}"
+                               Style="{StaticResource Label.Value}"/>
+                    </Grid>
+                    <Slider Minimum="0" Maximum="100" Value="{Binding Volume}"/>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- ── Pattern ─────────────────────────────────────────────── -->
+            <Border Style="{StaticResource Card}">
+                <VerticalStackLayout>
+                    <Label Text="PATTERN" Style="{StaticResource Label.Section}"/>
+                    <CollectionView ItemsSource="{Binding Patterns}"
+                                    SelectedItem="{Binding SelectedPattern, Mode=TwoWay}"
+                                    SelectionMode="Single"
+                                    HeightRequest="200">
+                        <CollectionView.ItemsLayout>
+                            <LinearItemsLayout Orientation="Vertical" ItemSpacing="8"/>
+                        </CollectionView.ItemsLayout>
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate>
+                                <Border StrokeShape="RoundRectangle 10"
+                                        Padding="14,10">
+                                    <Border.Triggers>
+                                        <DataTrigger TargetType="Border"
+                                                     Binding="{Binding IsSelected, Source={RelativeSource AncestorType={x:Type CollectionView}}}"
+                                                     Value="True">
+                                            <Setter Property="BackgroundColor" Value="#1A3040"/>
+                                            <Setter Property="Stroke" Value="#7EB8D4"/>
+                                        </DataTrigger>
+                                    </Border.Triggers>
+                                    <Border.BackgroundColor>
+                                        <Color>#252730</Color>
+                                    </Border.BackgroundColor>
+                                    <Border.Stroke>
+                                        <Color>#2A2D38</Color>
+                                    </Border.Stroke>
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <VerticalStackLayout Grid.Column="0">
+                                            <Label Text="{Binding Name}"
+                                                   TextColor="{StaticResource TextPrimary}"
+                                                   FontSize="14"
+                                                   FontAttributes="Bold"/>
+                                            <Label Text="{Binding Description}"
+                                                   TextColor="{StaticResource TextSecondary}"
+                                                   FontSize="12"/>
+                                        </VerticalStackLayout>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- ── Firewood Crackle ─────────────────────────────────────── -->
+            <Border Style="{StaticResource Card}">
+                <VerticalStackLayout>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Grid.Column="0" Text="FIREWOOD CRACKLE"
+                               Style="{StaticResource Label.Section}"/>
+                        <Switch Grid.Column="1"
+                                IsToggled="{Binding CrackleEnabled}"
+                                Margin="0,-8,0,0"/>
+                    </Grid>
+                    <VerticalStackLayout IsVisible="{Binding CrackleEnabled}">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label Grid.Column="0" Text="Intensity"
+                                   TextColor="{StaticResource TextSecondary}"
+                                   FontSize="13"/>
+                            <Label Grid.Column="1"
+                                   Text="{Binding CrackleIntensity, StringFormat='{0:F0}%'}"
+                                   TextColor="{StaticResource CrackleOrange}"
+                                   FontSize="13"/>
+                        </Grid>
+                        <Slider Minimum="0" Maximum="100"
+                                Value="{Binding CrackleIntensity}"
+                                MinimumTrackColor="{StaticResource CrackleOrange}"
+                                ThumbColor="{StaticResource CrackleOrange}"/>
+                    </VerticalStackLayout>
+                    <Label Text="Procedurally synthesised — no audio files required"
+                           TextColor="{StaticResource TextSecondary}"
+                           FontSize="11"
+                           Opacity="0.6"
+                           Margin="0,4,0,0"/>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- ── Duration ─────────────────────────────────────────────── -->
+            <Border Style="{StaticResource Card}">
+                <VerticalStackLayout>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Grid.Column="0" Text="DURATION" Style="{StaticResource Label.Section}"/>
+                        <Label Grid.Column="1" Text="{Binding DurationLabel}"
+                               Style="{StaticResource Label.Value}"/>
+                    </Grid>
+                    <Slider Minimum="0" Maximum="120" Value="{Binding DurationMinutes}"/>
+                    <Label Text="Drag to 0 for infinite playback"
+                           TextColor="{StaticResource TextSecondary}"
+                           FontSize="11"
+                           Opacity="0.6"/>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- ── Fade Out ──────────────────────────────────────────────── -->
+            <Border Style="{StaticResource Card}">
+                <VerticalStackLayout>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Grid.Column="0" Text="FADE OUT" Style="{StaticResource Label.Section}"/>
+                        <Switch Grid.Column="1"
+                                IsToggled="{Binding FadeOut}"
+                                Margin="0,-8,0,0"/>
+                    </Grid>
+                    <VerticalStackLayout IsVisible="{Binding FadeOut}">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label Grid.Column="0" Text="Fade duration"
+                                   TextColor="{StaticResource TextSecondary}"
+                                   FontSize="13"/>
+                            <Label Grid.Column="1" Text="{Binding FadeLabel}"
+                                   Style="{StaticResource Label.Value}"/>
+                        </Grid>
+                        <Slider Minimum="5" Maximum="120"
+                                Value="{Binding FadeDurationSeconds}"/>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

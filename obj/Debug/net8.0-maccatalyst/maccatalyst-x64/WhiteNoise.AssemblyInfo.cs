@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("WhiteNoise")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0+5602c204340af1feaf4dd443727f5f9cf3f45ccb")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0+7a42bed49c425033a5d5c15199241f2534701fa5")]
 [assembly: System.Reflection.AssemblyProductAttribute("WhiteNoise")]
 [assembly: System.Reflection.AssemblyTitleAttribute("WhiteNoise")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

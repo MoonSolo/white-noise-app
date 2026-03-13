@@ -3,17 +3,12 @@ using WhiteNoise.Audio;
 
 namespace WhiteNoise.Services
 {
-    /// <summary>
-    /// Application-level audio service. Injected via DI.
-    /// Wraps AudioEngine and resolves the correct platform output.
-    /// </summary>
     public class AudioService : IDisposable
     {
         private readonly AudioEngine _engine = new AudioEngine();
         private IPlatformAudioOutput? _output;
         private bool _isPlaying = false;
 
-        // ── forwarded properties ─────────────────────────────────────────────
         public float Volume
         {
             get => _engine.Volume;
@@ -38,6 +33,19 @@ namespace WhiteNoise.Services
             set => _engine.CrackleIntensity = Math.Clamp(value, 0f, 1f);
         }
 
+        // ── new properties ───────────────────────────────────────────────────
+        public float NoiseFrequency
+        {
+            get => _engine.NoiseFrequency;
+            set => _engine.NoiseFrequency = Math.Clamp(value, 80f, 20000f);
+        }
+
+        public float WaveFrequency
+        {
+            get => _engine.WaveFrequency;
+            set => _engine.WaveFrequency = Math.Clamp(value, 1f, 60f);
+        }
+
         public TimeSpan Duration
         {
             get => _engine.Duration;
@@ -57,8 +65,6 @@ namespace WhiteNoise.Services
         }
 
         public bool IsPlaying => _isPlaying;
-
-        // ── playback control ─────────────────────────────────────────────────
 
         public void Play()
         {
@@ -86,8 +92,6 @@ namespace WhiteNoise.Services
             Stop();
             _engine.Dispose();
         }
-
-        // ── platform resolution ──────────────────────────────────────────────
 
         private static IPlatformAudioOutput CreatePlatformOutput()
         {

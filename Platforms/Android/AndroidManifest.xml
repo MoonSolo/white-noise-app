@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          package="com.yourname.whitenoise">
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-sdk android:minSdkVersion="23" android:targetSdkVersion="34" />
+    <application
+        android:label="White Noise"
+        android:icon="@mipmap/appicon"
+        android:roundIcon="@mipmap/appicon_round"
+        android:theme="@style/Maui.MainTheme"
+        android:allowBackup="true"
+        android:supportsRtl="true">
+    </application>
+</manifest>

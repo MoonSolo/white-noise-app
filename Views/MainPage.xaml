@@ -7,17 +7,15 @@
              Title="White Noise">
 
     <ContentPage.Resources>
-        <!-- Colors -->
         <Color x:Key="Surface">#161820</Color>
         <Color x:Key="Elevated">#1E2029</Color>
         <Color x:Key="Accent">#7EB8D4</Color>
-        <Color x:Key="AccentDim">#3A6A80</Color>
         <Color x:Key="TextPrimary">#E8EAF0</Color>
         <Color x:Key="TextSecondary">#8890A4</Color>
         <Color x:Key="Divider">#252730</Color>
         <Color x:Key="CrackleOrange">#C8793A</Color>
+        <Color x:Key="CustomPurple">#9B8FD4</Color>
 
-        <!-- Shared label style -->
         <Style x:Key="Label.Section" TargetType="Label">
             <Setter Property="TextColor" Value="{StaticResource TextSecondary}"/>
             <Setter Property="FontSize" Value="11"/>
@@ -56,47 +54,78 @@
     <ScrollView>
         <VerticalStackLayout Padding="20,48,20,32" Spacing="0">
 
-            <!-- ── Header ──────────────────────────────────────────────── -->
+            <!-- ── Header ──────────────────────────────────────────────────── -->
             <Label Text="WHITE NOISE"
                    TextColor="{StaticResource Accent}"
-                   FontSize="11"
-                   CharacterSpacing="4"
+                   FontSize="11" CharacterSpacing="4"
                    FontAttributes="Bold"
                    HorizontalOptions="Center"
                    Margin="0,0,0,4"/>
-
             <Label Text="Sleep · Focus · Rest"
                    TextColor="{StaticResource TextSecondary}"
                    FontSize="15"
                    HorizontalOptions="Center"
                    Margin="0,0,0,36"/>
 
-            <!-- ── Play / Stop ──────────────────────────────────────────── -->
+            <!-- ── Play / Stop ──────────────────────────────────────────────── -->
             <Border Style="{StaticResource Card}" Margin="40,0,40,28">
                 <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+
+                    <!-- Play button: colour changes green when playing -->
                     <Button Grid.Column="0"
                             Text="{Binding PlayPauseLabel}"
                             Command="{Binding PlayPauseCommand}"
-                            BackgroundColor="{StaticResource Accent}"
-                            TextColor="#0D0E12"
+                            BackgroundColor="{Binding PlayButtonColor}"
+                            TextColor="{Binding PlayButtonTextColor}"
                             FontAttributes="Bold"
                             FontSize="15"
                             CornerRadius="10"
-                            HeightRequest="52"/>
+                            HeightRequest="52">
+                        <Button.Triggers>
+                            <DataTrigger TargetType="Button"
+                                         Binding="{Binding IsPlaying}"
+                                         Value="True">
+                                <Setter Property="BackgroundColor" Value="#4A9F6E"/>
+                            </DataTrigger>
+                            <DataTrigger TargetType="Button"
+                                         Binding="{Binding IsPlaying}"
+                                         Value="False">
+                                <Setter Property="BackgroundColor" Value="{StaticResource Accent}"/>
+                            </DataTrigger>
+                        </Button.Triggers>
+                    </Button>
+
+                    <!-- Stop button: lights up red when playing -->
                     <Button Grid.Column="1"
-                            Text="Stop"
+                            Text="⏹  Stop"
                             Command="{Binding StopCommand}"
-                            BackgroundColor="Transparent"
-                            BorderColor="{StaticResource Divider}"
-                            BorderWidth="1"
-                            TextColor="{StaticResource TextSecondary}"
                             FontSize="15"
                             CornerRadius="10"
-                            HeightRequest="52"/>
+                            HeightRequest="52">
+                        <Button.Triggers>
+                            <DataTrigger TargetType="Button"
+                                         Binding="{Binding IsPlaying}"
+                                         Value="True">
+                                <Setter Property="BackgroundColor" Value="#7A2E2E"/>
+                                <Setter Property="TextColor" Value="#F0A0A0"/>
+                                <Setter Property="BorderColor" Value="#A04040"/>
+                                <Setter Property="BorderWidth" Value="1"/>
+                            </DataTrigger>
+                            <DataTrigger TargetType="Button"
+                                         Binding="{Binding IsPlaying}"
+                                         Value="False">
+                                <Setter Property="BackgroundColor" Value="Transparent"/>
+                                <Setter Property="TextColor" Value="{StaticResource TextSecondary}"/>
+                                <Setter Property="BorderColor" Value="{StaticResource Divider}"/>
+                                <Setter Property="BorderWidth" Value="1"/>
+                            </DataTrigger>
+                        </Button.Triggers>
+                    </Button>
+
                 </Grid>
             </Border>
 
-            <!-- ── Volume ──────────────────────────────────────────────── -->
+            <!-- ── Volume ──────────────────────────────────────────────────── -->
             <Border Style="{StaticResource Card}">
                 <VerticalStackLayout>
                     <Grid ColumnDefinitions="*,Auto">
@@ -108,46 +137,29 @@
                 </VerticalStackLayout>
             </Border>
 
-            <!-- ── Pattern ─────────────────────────────────────────────── -->
+            <!-- ── Pattern ─────────────────────────────────────────────────── -->
             <Border Style="{StaticResource Card}">
                 <VerticalStackLayout>
                     <Label Text="PATTERN" Style="{StaticResource Label.Section}"/>
                     <CollectionView ItemsSource="{Binding Patterns}"
                                     SelectedItem="{Binding SelectedPattern, Mode=TwoWay}"
                                     SelectionMode="Single"
-                                    HeightRequest="200">
+                                    HeightRequest="240">
                         <CollectionView.ItemsLayout>
-                            <LinearItemsLayout Orientation="Vertical" ItemSpacing="8"/>
+                            <LinearItemsLayout Orientation="Vertical" ItemSpacing="6"/>
                         </CollectionView.ItemsLayout>
                         <CollectionView.ItemTemplate>
                             <DataTemplate>
-                                <Border StrokeShape="RoundRectangle 10"
-                                        Padding="14,10">
-                                    <Border.Triggers>
-                                        <DataTrigger TargetType="Border"
-                                                     Binding="{Binding IsSelected, Source={RelativeSource AncestorType={x:Type CollectionView}}}"
-                                                     Value="True">
-                                            <Setter Property="BackgroundColor" Value="#1A3040"/>
-                                            <Setter Property="Stroke" Value="#7EB8D4"/>
-                                        </DataTrigger>
-                                    </Border.Triggers>
-                                    <Border.BackgroundColor>
-                                        <Color>#252730</Color>
-                                    </Border.BackgroundColor>
-                                    <Border.Stroke>
-                                        <Color>#2A2D38</Color>
-                                    </Border.Stroke>
-                                    <Grid ColumnDefinitions="*,Auto">
-                                        <VerticalStackLayout Grid.Column="0">
-                                            <Label Text="{Binding Name}"
-                                                   TextColor="{StaticResource TextPrimary}"
-                                                   FontSize="14"
-                                                   FontAttributes="Bold"/>
-                                            <Label Text="{Binding Description}"
-                                                   TextColor="{StaticResource TextSecondary}"
-                                                   FontSize="12"/>
-                                        </VerticalStackLayout>
-                                    </Grid>
+                                <Border StrokeShape="RoundRectangle 10" Padding="14,10"
+                                        BackgroundColor="#252730" Stroke="#2A2D38">
+                                    <VerticalStackLayout>
+                                        <Label Text="{Binding Name}"
+                                               TextColor="{StaticResource TextPrimary}"
+                                               FontSize="14" FontAttributes="Bold"/>
+                                        <Label Text="{Binding Description}"
+                                               TextColor="{StaticResource TextSecondary}"
+                                               FontSize="12"/>
+                                    </VerticalStackLayout>
                                 </Border>
                             </DataTemplate>
                         </CollectionView.ItemTemplate>
@@ -155,40 +167,77 @@
                 </VerticalStackLayout>
             </Border>
 
-            <!-- ── Firewood Crackle ─────────────────────────────────────── -->
+            <!-- ── Custom mode controls (visible only when Custom is selected) -->
+            <Border Style="{StaticResource Card}"
+                    IsVisible="{Binding IsCustomMode}"
+                    Stroke="#4A3F6B"
+                    BackgroundColor="#1A1828">
+                <VerticalStackLayout>
+
+                    <Label Text="CUSTOM SETTINGS" Style="{StaticResource Label.Section}"
+                           TextColor="{StaticResource CustomPurple}"/>
+
+                    <!-- Noise frequency -->
+                    <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,4">
+                        <Label Grid.Column="0" Text="Noise frequency"
+                               TextColor="{StaticResource TextSecondary}" FontSize="13"/>
+                        <Label Grid.Column="1" Text="{Binding NoiseFrequencyLabel}"
+                               TextColor="{StaticResource CustomPurple}" FontSize="13"/>
+                    </Grid>
+                    <Slider Minimum="100" Maximum="20000"
+                            Value="{Binding NoiseFrequency}"
+                            MinimumTrackColor="{StaticResource CustomPurple}"
+                            ThumbColor="{StaticResource CustomPurple}"/>
+                    <Label Text="Low = deep rumble (brown noise)   High = bright hiss (white noise)"
+                           TextColor="{StaticResource TextSecondary}"
+                           FontSize="10" Opacity="0.6" Margin="0,0,0,14"/>
+
+                    <!-- Wave frequency -->
+                    <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,4">
+                        <Label Grid.Column="0" Text="Wave speed"
+                               TextColor="{StaticResource TextSecondary}" FontSize="13"/>
+                        <Label Grid.Column="1" Text="{Binding WaveFrequencyLabel}"
+                               TextColor="{StaticResource CustomPurple}" FontSize="13"/>
+                    </Grid>
+                    <Slider Minimum="1" Maximum="60"
+                            Value="{Binding WaveFrequency}"
+                            MinimumTrackColor="{StaticResource CustomPurple}"
+                            ThumbColor="{StaticResource CustomPurple}"/>
+                    <Label Text="How many times per minute the volume rises and falls"
+                           TextColor="{StaticResource TextSecondary}"
+                           FontSize="10" Opacity="0.6"/>
+
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- ── Firewood Crackle ─────────────────────────────────────────── -->
             <Border Style="{StaticResource Card}">
                 <VerticalStackLayout>
                     <Grid ColumnDefinitions="*,Auto">
                         <Label Grid.Column="0" Text="FIREWOOD CRACKLE"
                                Style="{StaticResource Label.Section}"/>
-                        <Switch Grid.Column="1"
-                                IsToggled="{Binding CrackleEnabled}"
+                        <Switch Grid.Column="1" IsToggled="{Binding CrackleEnabled}"
                                 Margin="0,-8,0,0"/>
                     </Grid>
                     <VerticalStackLayout IsVisible="{Binding CrackleEnabled}">
                         <Grid ColumnDefinitions="*,Auto">
                             <Label Grid.Column="0" Text="Intensity"
-                                   TextColor="{StaticResource TextSecondary}"
-                                   FontSize="13"/>
+                                   TextColor="{StaticResource TextSecondary}" FontSize="13"/>
                             <Label Grid.Column="1"
                                    Text="{Binding CrackleIntensity, StringFormat='{0:F0}%'}"
-                                   TextColor="{StaticResource CrackleOrange}"
-                                   FontSize="13"/>
+                                   TextColor="{StaticResource CrackleOrange}" FontSize="13"/>
                         </Grid>
-                        <Slider Minimum="0" Maximum="100"
-                                Value="{Binding CrackleIntensity}"
+                        <Slider Minimum="0" Maximum="100" Value="{Binding CrackleIntensity}"
                                 MinimumTrackColor="{StaticResource CrackleOrange}"
                                 ThumbColor="{StaticResource CrackleOrange}"/>
                     </VerticalStackLayout>
                     <Label Text="Procedurally synthesised — no audio files required"
                            TextColor="{StaticResource TextSecondary}"
-                           FontSize="11"
-                           Opacity="0.6"
-                           Margin="0,4,0,0"/>
+                           FontSize="11" Opacity="0.6" Margin="0,4,0,0"/>
                 </VerticalStackLayout>
             </Border>
 
-            <!-- ── Duration ─────────────────────────────────────────────── -->
+            <!-- ── Duration ────────────────────────────────────────────────── -->
             <Border Style="{StaticResource Card}">
                 <VerticalStackLayout>
                     <Grid ColumnDefinitions="*,Auto">
@@ -199,30 +248,26 @@
                     <Slider Minimum="0" Maximum="120" Value="{Binding DurationMinutes}"/>
                     <Label Text="Drag to 0 for infinite playback"
                            TextColor="{StaticResource TextSecondary}"
-                           FontSize="11"
-                           Opacity="0.6"/>
+                           FontSize="11" Opacity="0.6"/>
                 </VerticalStackLayout>
             </Border>
 
-            <!-- ── Fade Out ──────────────────────────────────────────────── -->
+            <!-- ── Fade Out ─────────────────────────────────────────────────── -->
             <Border Style="{StaticResource Card}">
                 <VerticalStackLayout>
                     <Grid ColumnDefinitions="*,Auto">
                         <Label Grid.Column="0" Text="FADE OUT" Style="{StaticResource Label.Section}"/>
-                        <Switch Grid.Column="1"
-                                IsToggled="{Binding FadeOut}"
+                        <Switch Grid.Column="1" IsToggled="{Binding FadeOut}"
                                 Margin="0,-8,0,0"/>
                     </Grid>
                     <VerticalStackLayout IsVisible="{Binding FadeOut}">
                         <Grid ColumnDefinitions="*,Auto">
                             <Label Grid.Column="0" Text="Fade duration"
-                                   TextColor="{StaticResource TextSecondary}"
-                                   FontSize="13"/>
+                                   TextColor="{StaticResource TextSecondary}" FontSize="13"/>
                             <Label Grid.Column="1" Text="{Binding FadeLabel}"
                                    Style="{StaticResource Label.Value}"/>
                         </Grid>
-                        <Slider Minimum="5" Maximum="120"
-                                Value="{Binding FadeDurationSeconds}"/>
+                        <Slider Minimum="5" Maximum="120" Value="{Binding FadeDurationSeconds}"/>
                     </VerticalStackLayout>
                 </VerticalStackLayout>
             </Border>

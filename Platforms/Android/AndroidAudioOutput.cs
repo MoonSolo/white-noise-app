@@ -1,6 +1,3 @@
-// Android platform audio output — uses Android.Media.AudioTrack.
-// Compiled only on Android (condition in .csproj).
-
 #if ANDROID
 using System;
 using Android.Media;
@@ -10,10 +7,10 @@ namespace WhiteNoise.Platforms.Android
 {
     public class AndroidAudioOutput : IPlatformAudioOutput
     {
-        private AudioTrack?                   _track;
-        private Func<float[], int, bool>?     _callback;
-        private System.Threading.Thread?      _fillThread;
-        private volatile bool                 _running;
+        private AudioTrack?               _track;
+        private Func<float[], int, bool>? _callback;
+        private System.Threading.Thread?  _fillThread;
+        private volatile bool             _running;
 
         private int _sampleRate;
         private int _channels;
@@ -25,12 +22,8 @@ namespace WhiteNoise.Platforms.Android
             _channels     = channels;
             _bufferFrames = bufferFrames;
 
-            var channelMask = channels == 2
-                ? ChannelOut.Stereo
-                : ChannelOut.Mono;
-
-            int minBuf = AudioTrack.GetMinBufferSize(
-                sampleRate, channelMask, Encoding.PcmFloat);
+            var channelMask = channels == 2 ? ChannelOut.Stereo : ChannelOut.Mono;
+            int minBuf  = AudioTrack.GetMinBufferSize(sampleRate, channelMask, Encoding.PcmFloat);
             int bufSize = Math.Max(minBuf, bufferFrames * channels * sizeof(float));
 
             _track = new AudioTrack.Builder()

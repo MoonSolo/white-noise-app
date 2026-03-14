@@ -5,6 +5,10 @@ namespace WhiteNoise.Services
 {
     public class AudioService : IDisposable
     {
+        private const int SampleRate   = 44100;
+        private const int Channels     = 2;
+        private const int BufferFrames = 1024;
+
         private readonly AudioEngine _engine = new AudioEngine();
         private IPlatformAudioOutput? _output;
         private bool _isPlaying = false;
@@ -33,7 +37,6 @@ namespace WhiteNoise.Services
             set => _engine.CrackleIntensity = Math.Clamp(value, 0f, 1f);
         }
 
-        // ── new properties ───────────────────────────────────────────────────
         public float NoiseFrequency
         {
             get => _engine.NoiseFrequency;
@@ -46,10 +49,17 @@ namespace WhiteNoise.Services
             set => _engine.WaveFrequency = Math.Clamp(value, 1f, 60f);
         }
 
-        public TimeSpan Duration
+        public bool CustomWaveEnabled
+        {
+            get => _engine.CustomWaveEnabled;
+            set => _engine.CustomWaveEnabled = value;
+        }
+
+        /// <summary>Duration in seconds. 0 = play forever.</summary>
+        public float Duration
         {
             get => _engine.Duration;
-            set => _engine.Duration = value;
+            set => _engine.Duration = Math.Max(0f, value);
         }
 
         public bool FadeOut
@@ -58,10 +68,11 @@ namespace WhiteNoise.Services
             set => _engine.FadeOut = value;
         }
 
-        public TimeSpan FadeDuration
+        /// <summary>Fade duration in seconds.</summary>
+        public float FadeDuration
         {
             get => _engine.FadeDuration;
-            set => _engine.FadeDuration = value;
+            set => _engine.FadeDuration = Math.Max(0f, value);
         }
 
         public bool IsPlaying => _isPlaying;
@@ -69,15 +80,18 @@ namespace WhiteNoise.Services
         public void Play()
         {
             if (_isPlaying) return;
+            _engine.Reset();
             _output = CreatePlatformOutput();
-            _engine.Start(_output);
+            _output.Initialize(SampleRate, Channels, BufferFrames);
+            _output.Start(_engine.FillBuffer);
             _isPlaying = true;
         }
 
         public void Stop()
         {
             if (!_isPlaying) return;
-            _engine.Stop();
+            _output?.Stop();
+            _output?.Dispose();
             _output = null;
             _isPlaying = false;
         }
@@ -90,7 +104,6 @@ namespace WhiteNoise.Services
         public void Dispose()
         {
             Stop();
-            _engine.Dispose();
         }
 
         private static IPlatformAudioOutput CreatePlatformOutput()

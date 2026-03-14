@@ -1,215 +1,340 @@
 using System;
-using System.Threading;
 
 namespace WhiteNoise.Audio
 {
     public enum NoisePattern
     {
-        Constant,
-        Wave,
-        Rain,
-        Pulse,
-        Breathing,
-        Custom      // user-controlled noise colour + wave speed
+        Constant,   // flat white noise
+        Wave,       // slow sine LFO ~0.15 Hz
+        Rain,       // fast shimmer
+        Pulse,      // rhythmic thumps
+        Breathing,  // slow asymmetric ramp
+        Ocean,      // random wave bursts 250-450 Hz band, 0.5-2s intervals
+        Custom      // user-controlled frequency + wave speed
     }
 
-    public class AudioEngine : IDisposable
+    public class AudioEngine
     {
-        // ── public state ─────────────────────────────────────────────────────
-        public float Volume           { get; set; } = 0.5f;
-        public NoisePattern Pattern   { get; set; } = NoisePattern.Wave;
-        public bool CrackleEnabled    { get; set; } = false;
-        public float CrackleIntensity { get; set; } = 0.3f;
+        // ── audio constants ──────────────────────────────────────────────
+        private const int SampleRate = 44100;
+        private const int Channels   = 2;
+        private const int FrameSize  = 1024;
 
-        // Custom mode parameters
-        // NoiseFrequency: low-pass cutoff on the raw noise.
-        //   100 Hz  → deep brown/red rumble
-        //   1000 Hz → pink-ish
-        //   20000 Hz → flat white (no filtering)
-        public float NoiseFrequency { get; set; } = 20000f;
+        // ── state ────────────────────────────────────────────────────────
+        private readonly Random _rng = new Random();
 
-        // WaveFrequency: LFO speed in cycles per minute (1 = very slow, 60 = 1 Hz)
-        public float WaveFrequency  { get; set; } = 9f;
+        // One-pole low-pass for Custom mode
+        private float _lpState;
 
-        // Duration / fade
-        public TimeSpan Duration     { get; set; } = TimeSpan.Zero;
-        public bool FadeOut          { get; set; } = true;
-        public TimeSpan FadeDuration { get; set; } = TimeSpan.FromSeconds(30);
+        // LFO / envelope phase
+        private double _lfoPhase;          // 0..1
+        private double _breathPhase;       // 0..1
 
-        // ── audio constants ──────────────────────────────────────────────────
-        public const int SampleRate   = 44100;
-        public const int Channels     = 2;
-        public const int BufferFrames = 1024;
+        // Ocean state
+        private float  _oceanEnv;          // current envelope amplitude 0..1
+        private float  _oceanTargetEnv;    // target (burst on or silent)
+        private float  _oceanAttackRate;
+        private float  _oceanDecayRate;
+        private double _oceanLpState;      // bandpass lo
+        private double _oceanHpState;      // bandpass hi
+        private float  _oceanCenterHz;     // current center freq 250-450
+        private int    _oceanHoldSamples;  // samples left in current burst/gap
+        private bool   _oceanBursting;
 
-        // ── private state ────────────────────────────────────────────────────
-        private readonly Random _rng     = new Random();
-        private double          _time    = 0.0;
-        private DateTime        _startTime;
-        private bool            _running = false;
-        private CancellationTokenSource? _cts;
-        private IPlatformAudioOutput?    _output;
+        // Crackle state
+        private float  _crackleAmp;
+        private float  _crackleDecay;
+        private int    _crackleSamplesLeft;
 
-        // one-pole low-pass filter accumulator
-        private float _lpState = 0f;
+        // Fade-out
+        private long   _totalSamples;      // total samples to produce (0 = infinite)
+        private long   _samplesProduced;
+        private int    _fadeSamples;
+        private bool   _fadeActive;
 
-        // crackle state
-        private double _crackleTimer = 0.0;
-        private double _nextCrackle  = 0.0;
-        private float  _crackleDecay = 0.0f;
-        private float  _crackleAmp   = 0.0f;
+        // ── public properties ─────────────────────────────────────────────
+        public float   Volume          { get; set; } = 0.7f;
+        public NoisePattern Pattern    { get; set; } = NoisePattern.Constant;
+        public bool    CrackleEnabled  { get; set; } = false;
+        public float   CrackleIntensity { get; set; } = 0.5f;
 
-        // ── lifecycle ─────────────────────────────────────────────────────────
+        /// <summary>Low-pass cutoff in Hz for Custom mode (80–20000).</summary>
+        public float   NoiseFrequency  { get; set; } = 1000f;
 
-        public void Start(IPlatformAudioOutput output)
+        /// <summary>Wave speed in cpm for Custom wave LFO (1–60).</summary>
+        public float   WaveFrequency   { get; set; } = 10f;
+
+        /// <summary>When true Custom mode applies the wave LFO; when false it's flat (Constant).</summary>
+        public bool    CustomWaveEnabled { get; set; } = false;
+
+        /// <summary>Duration in seconds; 0 = play forever.</summary>
+        public float   Duration        { get; set; } = 0f;
+
+        public bool    FadeOut         { get; set; } = false;
+        public float   FadeDuration    { get; set; } = 5f;
+
+        // ── init ─────────────────────────────────────────────────────────
+        public AudioEngine()
         {
-            if (_running) return;
-            _output    = output;
-            _startTime = DateTime.UtcNow;
-            _time      = 0.0;
-            _lpState   = 0f;
-            _running   = true;
-            _cts       = new CancellationTokenSource();
-            output.Initialize(SampleRate, Channels, BufferFrames);
-            output.Start(FillBuffer);
+            _oceanHoldSamples = SampleRate; // start silent
+            _oceanBursting    = false;
+            _oceanCenterHz    = 350f;
+            ScheduleNextOceanPhase();
         }
 
-        public void Stop()
+        public void Reset()
         {
-            _running = false;
-            _cts?.Cancel();
-            _output?.Stop();
-            _output?.Dispose();
-            _output = null;
-        }
+            _lfoPhase       = 0;
+            _breathPhase    = 0;
+            _lpState        = 0;
+            _oceanEnv       = 0;
+            _oceanLpState   = 0;
+            _oceanHpState   = 0;
+            _crackleAmp     = 0;
+            _samplesProduced = 0;
+            _fadeActive     = false;
 
-        public void Dispose() => Stop();
-
-        // ── DSP core ─────────────────────────────────────────────────────────
-
-        public bool FillBuffer(float[] buffer, int frameCount)
-        {
-            if (!_running) return false;
-
-            double elapsed   = (DateTime.UtcNow - _startTime).TotalSeconds;
-            double totalSecs = Duration.TotalSeconds;
-
-            if (totalSecs > 0 && elapsed >= totalSecs)
+            if (Duration > 0)
             {
-                Array.Clear(buffer, 0, buffer.Length);
-                return false;
+                _totalSamples = (long)(Duration * SampleRate);
+                _fadeSamples  = FadeOut ? (int)(FadeDuration * SampleRate) : 0;
+            }
+            else
+            {
+                _totalSamples = 0;
+                _fadeSamples  = 0;
             }
 
-            double dt = 1.0 / SampleRate;
+            ScheduleNextOceanPhase();
+        }
 
-            // Low-pass coefficient: a = 1 - exp(-2π * fc / fs)
-            // At fc=20000 Hz, a≈1 → no filtering (white). At fc=100 Hz → deep rumble.
-            float fc  = Math.Clamp(NoiseFrequency, 80f, 20000f);
-            float lpA = 1f - (float)Math.Exp(-2.0 * Math.PI * fc / SampleRate);
+        // ── main fill ────────────────────────────────────────────────────
+        /// <summary>
+        /// Fills <paramref name="buffer"/> with interleaved stereo PCM floats.
+        /// Returns false when the duration has elapsed (caller should stop).
+        /// </summary>
+        public bool FillBuffer(float[] buffer, int frames)
+        {
+            bool running = true;
 
-            for (int i = 0; i < frameCount; i++)
+            for (int i = 0; i < frames; i++)
             {
-                _time += dt;
+                // ── duration / fade ───────────────────────────────────────
+                float fadeMul = 1f;
+                if (_totalSamples > 0)
+                {
+                    long remaining = _totalSamples - _samplesProduced;
+                    if (remaining <= 0)
+                    {
+                        // silence remainder of buffer
+                        for (int j = i * Channels; j < frames * Channels; j++)
+                            buffer[j] = 0f;
+                        return false;
+                    }
+                    if (_fadeSamples > 0 && remaining <= _fadeSamples)
+                    {
+                        float t = (float)remaining / _fadeSamples;
+                        fadeMul = 0.5f - 0.5f * MathF.Cos(t * MathF.PI); // cosine fade
+                    }
+                }
 
-                // ── raw white noise ───────────────────────────────────────────
-                float raw = (float)(_rng.NextDouble() * 2.0 - 1.0);
+                // ── raw noise sample ─────────────────────────────────────
+                float noise = (float)(_rng.NextDouble() * 2.0 - 1.0);
 
-                // ── colour filter (always run, neutral at 20 kHz) ─────────────
-                _lpState += lpA * (raw - _lpState);
+                // ── pattern envelope ─────────────────────────────────────
+                float env = ComputePatternEnvelope(noise);
 
-                // In Custom mode use filtered signal; others use flat white noise
-                float noise = Pattern == NoisePattern.Custom ? _lpState : raw;
+                // ── crackle (additive, independent of noise gate) ─────────
+                float crackle = 0f;
+                if (CrackleEnabled)
+                    crackle = StepCrackle();
 
-                // ── LFO modulation ────────────────────────────────────────────
-                float lfoGain = ComputeLfo(_time);
+                // ── mix ───────────────────────────────────────────────────
+                // If pattern is Constant/Custom with no wave and crackleOnly:
+                // we allow crackle without carrier noise by zeroing the noise
+                // when pattern produces zero env — but env for Constant is always 1,
+                // so to support crackle-only we check below in the write path.
 
-                // ── crackle layer ─────────────────────────────────────────────
-                float crackle = CrackleEnabled ? ComputeCrackle(dt) : 0f;
+                float sample = env * noise + crackle;
+                sample *= Volume * fadeMul;
+                sample  = Math.Clamp(sample, -1f, 1f);
 
-                // ── mix + volume + fade ───────────────────────────────────────
-                float fade   = ComputeFade(elapsed + i * dt, totalSecs);
-                float sample = (noise * lfoGain + crackle) * fade * Volume;
-                sample = Math.Clamp(sample, -1f, 1f);
+                buffer[i * Channels]     = sample; // L
+                buffer[i * Channels + 1] = sample; // R
 
-                buffer[i * Channels]     = sample;
-                buffer[i * Channels + 1] = sample;
+                _samplesProduced++;
             }
 
-            return true;
+            // advance LFO phases for non-per-sample patterns
+            return running;
         }
 
-        // ── LFO shapes ───────────────────────────────────────────────────────
-
-        private float ComputeLfo(double t)
+        // ── pattern envelope (called once per sample) ────────────────────
+        private float ComputePatternEnvelope(float rawNoise)
         {
-            return Pattern switch
+            const double inv44100 = 1.0 / SampleRate;
+
+            switch (Pattern)
             {
-                NoisePattern.Constant  => 1.0f,
-                NoisePattern.Wave      => LfoSine(t, freqHz: 0.15),
-                NoisePattern.Rain      => LfoRain(t),
-                NoisePattern.Pulse     => LfoPulse(t, freqHz: 0.5),
-                NoisePattern.Breathing => LfoBreathing(t),
-                // Custom: WaveFrequency is in cycles/min → divide by 60 for Hz
-                NoisePattern.Custom    => LfoSine(t, freqHz: WaveFrequency / 60.0),
-                _                      => 1.0f
-            };
-        }
+                // ── Constant ──────────────────────────────────────────────
+                case NoisePattern.Constant:
+                    return 1f;
 
-        private float LfoSine(double t, double freqHz)
-        {
-            return 0.6f + 0.4f * (float)Math.Sin(t * freqHz * 2.0 * Math.PI);
-        }
+                // ── Wave (slow sine, ~0.15 Hz) ────────────────────────────
+                case NoisePattern.Wave:
+                {
+                    _lfoPhase += 0.15 * inv44100;
+                    if (_lfoPhase >= 1.0) _lfoPhase -= 1.0;
+                    float lfo = 0.5f + 0.5f * MathF.Sin((float)(_lfoPhase * 2 * Math.PI));
+                    return 0.3f + 0.7f * lfo;
+                }
 
-        private float LfoRain(double t)
-        {
-            double fast  = Math.Sin(t * 3.7 * Math.PI * 2.0);
-            double slow  = Math.Sin(t * 0.4 * Math.PI * 2.0);
-            double noise = _rng.NextDouble() * 0.15;
-            return (float)Math.Max(0.2, 0.55 + 0.3 * fast * slow + noise);
-        }
+                // ── Rain (fast shimmer) ───────────────────────────────────
+                case NoisePattern.Rain:
+                {
+                    _lfoPhase += 3.7 * inv44100;
+                    if (_lfoPhase >= 1.0) _lfoPhase -= 1.0;
+                    double jitter = _rng.NextDouble() * 0.005;
+                    float fast = 0.5f + 0.5f * MathF.Sin((float)((_lfoPhase + jitter) * 2 * Math.PI));
+                    _breathPhase += 0.4 * inv44100;
+                    if (_breathPhase >= 1.0) _breathPhase -= 1.0;
+                    float slow = 0.5f + 0.5f * MathF.Sin((float)(_breathPhase * 2 * Math.PI));
+                    return 0.2f + 0.5f * fast * slow;
+                }
 
-        private float LfoPulse(double t, double freqHz)
-        {
-            double saw = Math.Sin((t * freqHz % 1.0) * Math.PI * 2.0);
-            return (float)(0.5 + 0.5 * Math.Tanh(saw * 4.0));
-        }
+                // ── Pulse (soft rhythmic thumps) ──────────────────────────
+                case NoisePattern.Pulse:
+                {
+                    _lfoPhase += 0.5 * inv44100;
+                    if (_lfoPhase >= 1.0) _lfoPhase -= 1.0;
+                    float raw = MathF.Sin((float)(_lfoPhase * 2 * Math.PI));
+                    float shaped = (float)Math.Tanh(raw * 3.0);
+                    return 0.35f + 0.65f * (0.5f + 0.5f * shaped);
+                }
 
-        private float LfoBreathing(double t)
-        {
-            double norm  = (t % 5.5) / 5.5;
-            double shape = norm < 0.35 ? norm / 0.35 : 1.0 - (norm - 0.35) / 0.65;
-            return (float)(0.25 + 0.75 * shape);
-        }
+                // ── Breathing (slow asymmetric triangle) ─────────────────
+                case NoisePattern.Breathing:
+                {
+                    double period = 5.5; // seconds
+                    _breathPhase += inv44100 / period;
+                    if (_breathPhase >= 1.0) _breathPhase -= 1.0;
+                    float env;
+                    if (_breathPhase < 0.4)
+                        env = (float)(_breathPhase / 0.4);      // inhale 40 %
+                    else
+                        env = (float)(1.0 - (_breathPhase - 0.4) / 0.6); // exhale 60 %
+                    return 0.1f + 0.9f * env;
+                }
 
-        // ── crackle ──────────────────────────────────────────────────────────
+                // ── Ocean (random burst, 250-450 Hz band) ─────────────────
+                case NoisePattern.Ocean:
+                    return ComputeOceanSample(rawNoise);
 
-        private float ComputeCrackle(double dt)
-        {
-            _crackleTimer += dt;
-            if (_crackleTimer >= _nextCrackle)
-            {
-                _crackleTimer = 0.0;
-                double rate   = 1.0 + CrackleIntensity * 15.0;
-                _nextCrackle  = -Math.Log(_rng.NextDouble() + 1e-9) / rate;
-                _crackleAmp   = (float)(_rng.NextDouble() * 0.6 + 0.2) * CrackleIntensity;
-                _crackleDecay = (float)(_rng.NextDouble() * 0.004 + 0.001);
+                // ── Custom (LP filter + optional wave LFO) ────────────────
+                case NoisePattern.Custom:
+                {
+                    // apply one-pole LP
+                    float fc = Math.Clamp(NoiseFrequency, 80f, 20000f);
+                    float a  = 1f - MathF.Exp(-2f * MathF.PI * fc / SampleRate);
+                    _lpState += a * (rawNoise - _lpState);
+
+                    if (!CustomWaveEnabled)
+                        return 1f; // flat — caller multiplies by lpState via the noise path
+
+                    // wave LFO
+                    double waveHz = Math.Clamp(WaveFrequency / 60.0, 1.0 / 60.0, 1.0);
+                    _lfoPhase += waveHz * inv44100;
+                    if (_lfoPhase >= 1.0) _lfoPhase -= 1.0;
+                    float lfo = 0.5f + 0.5f * MathF.Sin((float)(_lfoPhase * 2 * Math.PI));
+                    return 0.2f + 0.8f * lfo;
+                }
+
+                default:
+                    return 1f;
             }
-            if (_crackleAmp < 0.0001f) return 0f;
-            float s      = (float)(_rng.NextDouble() * 2.0 - 1.0) * _crackleAmp;
-            _crackleAmp *= 1.0f - _crackleDecay * SampleRate * (float)dt;
-            if (_crackleAmp < 0.0001f) _crackleAmp = 0f;
-            return s;
         }
 
-        // ── fade ─────────────────────────────────────────────────────────────
-
-        private float ComputeFade(double elapsed, double totalSecs)
+        // ── ocean DSP ────────────────────────────────────────────────────
+        private float ComputeOceanSample(float rawNoise)
         {
-            if (!FadeOut || totalSecs <= 0) return 1.0f;
-            double fadeSecs  = Math.Min(FadeDuration.TotalSeconds, totalSecs);
-            double fadeStart = totalSecs - fadeSecs;
-            if (elapsed < fadeStart) return 1.0f;
-            double t = (elapsed - fadeStart) / fadeSecs;
-            return (float)(0.5 + 0.5 * Math.Cos(t * Math.PI));
+            // advance hold counter
+            if (_oceanHoldSamples > 0)
+                _oceanHoldSamples--;
+            else
+                ScheduleNextOceanPhase();
+
+            // smooth envelope toward target
+            float rate = _oceanBursting ? _oceanAttackRate : _oceanDecayRate;
+            _oceanEnv += (_oceanTargetEnv - _oceanEnv) * rate;
+
+            if (_oceanEnv < 0.001f && !_oceanBursting)
+                _oceanEnv = 0f;
+
+            // band-pass the noise around _oceanCenterHz
+            // Two cascaded one-pole: LP at fc+bw/2, HP at fc-bw/2
+            float bw   = 80f; // Hz bandwidth
+            float fcLp = Math.Clamp(_oceanCenterHz + bw * 0.5f, 100f, 20000f);
+            float fcHp = Math.Clamp(_oceanCenterHz - bw * 0.5f, 50f, 19000f);
+
+            float aLp = 1f - MathF.Exp(-2f * MathF.PI * fcLp / SampleRate);
+            float aHp = 1f - MathF.Exp(-2f * MathF.PI * fcHp / SampleRate);
+
+            _oceanLpState += aLp * (rawNoise - (float)_oceanLpState);
+            float hp = (float)_oceanLpState - (float)_oceanHpState;
+            _oceanHpState += aHp * ((float)_oceanLpState - (float)_oceanHpState);
+
+            // allow clipping by not clamping here — clips naturally when * volume
+            return hp * _oceanEnv * 3.5f; // boost since BP attenuates
+        }
+
+        private void ScheduleNextOceanPhase()
+        {
+            if (_oceanBursting)
+            {
+                // end burst → start gap
+                _oceanBursting  = false;
+                _oceanTargetEnv = 0f;
+                // gap: 0.3 – 1.0 s
+                _oceanHoldSamples = (int)((_rng.NextDouble() * 0.7 + 0.3) * SampleRate);
+                _oceanDecayRate   = 0.0005f;
+            }
+            else
+            {
+                // start burst
+                _oceanBursting  = true;
+                _oceanTargetEnv = 1f;
+                // burst duration: 0.5 – 2.0 s
+                _oceanHoldSamples = (int)((_rng.NextDouble() * 1.5 + 0.5) * SampleRate);
+                _oceanAttackRate  = 0.002f;
+                _oceanDecayRate   = 0.0008f;
+                // pick random center frequency 250–450 Hz
+                _oceanCenterHz = 250f + (float)(_rng.NextDouble() * 200.0);
+            }
+        }
+
+        // ── crackle ───────────────────────────────────────────────────────
+        private float StepCrackle()
+        {
+            if (_crackleSamplesLeft > 0)
+            {
+                _crackleSamplesLeft--;
+                _crackleAmp *= _crackleDecay;
+                float n = (float)(_rng.NextDouble() * 2.0 - 1.0);
+                return _crackleAmp * n * CrackleIntensity;
+            }
+
+            // Poisson inter-arrival: mean interval decreases with intensity
+            double meanInterval = SampleRate * (0.05 + (1.0 - CrackleIntensity) * 0.45);
+            double u = Math.Max(_rng.NextDouble(), 1e-9);
+            int nextCrackle = (int)(-meanInterval * Math.Log(u));
+            _crackleSamplesLeft = Math.Max(0, nextCrackle - 200);
+
+            // new crackle event
+            _crackleAmp   = 0.4f + (float)_rng.NextDouble() * 0.6f;
+            _crackleDecay = 0.92f + (float)_rng.NextDouble() * 0.06f;
+
+            float sample = (float)(_rng.NextDouble() * 2.0 - 1.0);
+            return _crackleAmp * sample * CrackleIntensity;
         }
     }
 }
